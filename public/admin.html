@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="kk">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Админ Панель - Математика</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            margin: auto;
+        }
+
+        h1,
+        h2 {
+            color: #1a73e8;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-end {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-cheat {
+            background: #ffc107;
+            color: black;
+            margin-top: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .online {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .offline {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        #qrcode img {
+            margin: 20px auto;
+        }
+
+        .cheat-area {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #ffeeba;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Математика Турнирі - Админ</h1>
+        <hr>
+
+        <div id="setup">
+            <h2>1. Есептерді жүктеу</h2>
+            <p>Турнирді бастау үшін батырманы басыңыз:</p>
+            <button class="btn btn-start" onclick="initGame()">Бөлме жасау</button>
+        </div>
+
+        <div id="lobby" class="hidden">
+            <h2>Бөлме коды: <span id="code-val" style="color:red"></span></h2>
+            <div id="qrcode"></div>
+            <p>Оқушылардың тізімі:</p>
+            <table id="player-list"></table>
+            <br>
+            <button class="btn btn-start" onclick="startGame()">ТУРНИРДІ БАСТАУ</button>
+        </div>
+
+        <div id="status" class="hidden">
+            <h2>Турнир барысы (Live)</h2>
+            <table id="live-results">
+                <thead>
+                    <tr>
+                        <th>Орын</th>
+                        <th>Аты-жөні</th>
+                        <th>Ұпай</th>
+                        <th>Дұрыс</th>
+                        <th>Қате</th>
+                        <th>Күйі</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+
+            <div class="cheat-area">
+                <h3>🔒 Құпия накрутка (Админ ғана көреді)</h3>
+                <select id="cheat-target"></select>
+                <input type="number" id="cheat-val" placeholder="Ұпай саны">
+                <button class="btn btn-cheat" onclick="applyCheat()">Ұпай бер</button>
+            </div>
+            <br>
+            <button class="btn btn-end" onclick="stopGame()">АЯҚТАУ</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        const socket = io();
+        const problems = [
+            { q: "25 + 17", a: "42" }, { q: "9 * 6", a: "54" },
+            { q: "100 - 33", a: "67" }, { q: "81 / 9", a: "9" },
+            { q: "12 * 4", a: "48" }
+        ];
+
+        function initGame() {
+            socket.emit('adminSetup', problems);
+            document.getElementById('setup').classList.add('hidden');
+            document.getElementById('lobby').classList.remove('hidden');
+        }
+
+        socket.on('roomCreated', (code) => {
+            document.getElementById('code-val').innerText = code;
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), window.location.origin + "/student.html");
+        });
+
+        socket.on('updateAdmin', (users) => {
+            const body = document.getElementById('results-body');
+            const lobbyTable = document.getElementById('player-list');
+            const cheatSelect = document.getElementById('cheat-target');
+
+            body.innerHTML = "";
+            lobbyTable.innerHTML = "<tr><th>Оқушы аты</th></tr>";
+            cheatSelect.innerHTML = "";
+
+            const sorted = Object.entries(users).sort((a, b) => b[1].score - a[1].score);
+
+            sorted.forEach(([id, data], index) => {
+                // Live Кесте
+                body.innerHTML += `<tr>
+                    <td>${index + 1}</td>
+                    <td>${data.name}</td>
+                    <td>${data.score}</td>
+                    <td>${data.correct}</td>
+                    <td>${data.incorrect}</td>
+                    <td class="${data.online ? 'online' : 'offline'}">${data.online ? 'Желіде' : 'Шығып кетті'}</td>
+                </tr>`;
+                // Күту залы
+                lobbyTable.innerHTML += `<tr><td>${data.name}</td></tr>`;
+                // Накрутка
+                cheatSelect.innerHTML += `<option value="${id}">${data.name}</option>`;
+            });
+        });
+
+        function startGame() {
+            socket.emit('startTournament');
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('status').classList.remove('hidden');
+        }
+
+        function stopGame() {
+            socket.emit('endTournament');
+            alert("Турнир тоқтатылды!");
+        }
+
+        function applyCheat() {
+            const id = document.getElementById('cheat-target').value;
+            const val = document.getElementById('cheat-val').value;
+            socket.emit('secretCheat', { socketId: id, points: val });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="kk">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Турнирге қатысу</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #eef2f3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 350px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #q-text {
+            font-size: 28px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="join" class="box">
+        <h2>Турнирге кіру</h2>
+        <input type="text" id="name" placeholder="Атыңды жаз">
+        <input type="number" id="code" placeholder="Кодты жаз">
+        <button class="btn" onclick="join()">Қосылу</button>
+    </div>
+
+    <div id="wait" class="box hidden">
+        <h2>Күте тұрыңыз...</h2>
+        <p>Мұғалім турнирді бастағанда есептер шығады.</p>
+    </div>
+
+    <div id="game" class="box hidden">
+        <div id="q-text"></div>
+        <input type="number" id="ans" placeholder="Жауабы">
+        <button class="btn" onclick="send()">Жіберу</button>
+    </div>
+
+    <div id="finish" class="box hidden">
+        <h2>Аяқталды!</h2>
+        <p id="rank"></p>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let myProblems = [];
+        let currentIdx = 0;
+
+        function join() {
+            const name = document.getElementById('name').value;
+            const code = document.getElementById('code').value;
+            socket.emit('join', { name, code });
+        }
+
+        socket.on('waiting', () => {
+            document.getElementById('join').classList.add('hidden');
+            document.getElementById('wait').classList.remove('hidden');
+        });
+
+        socket.on('gameStarted', (probs) => {
+            myProblems = probs;
+            document.getElementById('wait').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            nextQ();
+        });
+
+        function nextQ() {
+            if (currentIdx < myProblems.length) {
+                document.getElementById('q-text').innerText = myProblems[currentIdx].q;
+                document.getElementById('ans').value = "";
+            } else {
+                document.getElementById('game').innerHTML = "<h3>Барлық есепті бітірдіңіз! Нәтижені күтіңіз.</h3>";
+            }
+        }
+
+        function send() {
+            const val = document.getElementById('ans').value;
+            const isCorrect = val === myProblems[currentIdx].a;
+            socket.emit('submitAnswer', isCorrect);
+            currentIdx++;
+            nextQ();
+        }
+
+        socket.on('gameEnded', (users) => {
+            document.getElementById('game').classList.add('hidden');
+            document.getElementById('finish').classList.remove('hidden');
+            const sorted = Object.entries(users).sort((a, b) => b[1].score - a[1].score);
+            const myRank = sorted.findIndex(([id]) => id === socket.id) + 1;
+            document.getElementById('rank').innerText = `Сенің орның: ${myRank}`;
+        });
+    </script>
+</body>
+
+</html>
